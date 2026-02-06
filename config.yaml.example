@@ -1,0 +1,16 @@
+# Model Manager Configuration for ComfyUI
+#
+# Copy this file to config.yaml and fill in your values.
+# Environment variables take priority over values in this file:
+#   MODEL_MANAGER_API_URL  - e.g. http://localhost:3000
+#   MODEL_MANAGER_API_KEY  - API key for authentication
+
+# Model Manager API URL
+api_url: "http://localhost:3000"
+
+# API key for authentication
+api_key: ""
+
+# Local cache directory for downloaded models
+# Defaults to ComfyUI's models directory + "model_manager_cache" if not set
+cache_dir: ""
