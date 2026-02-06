@@ -9,6 +9,13 @@ const NODE_FOLDER_MAP = {
     ModelManagerClearCache: null,
 };
 
+// Maps folder -> combo widget name on the node
+const FOLDER_COMBO_MAP = {
+    checkpoints: "ckpt_name",
+    loras: "lora_name",
+    vae: "vae_name",
+};
+
 const MODEL_MANAGER_NODE_TYPES = Object.keys(NODE_FOLDER_MAP);
 
 const modelManagerState = {
@@ -18,10 +25,83 @@ const modelManagerState = {
 
 const trackedWidgets = new Set(); // all auth widgets
 
-// Shared LoRA model list — [{id, name, baseModel, ...}]
-const loraModels = [];
-// Combo-compatible values: ["None", "id:name", ...]
-const loraValues = ["None"];
+// ---------------------------------------------------------------------------
+// Model cache — per-folder model data fetched from our API
+// ---------------------------------------------------------------------------
+
+const modelCache = {}; // folder -> { models: [...], values: [...], baseModels: [...] }
+
+function getCacheValues(folder, baseModel) {
+    const cache = modelCache[folder];
+    if (!cache) return [];
+    if (!baseModel || baseModel === "All") return cache.values;
+    return cache.models
+        .filter(m => m.baseModel === baseModel)
+        .map(m => `${m.id}:${m.name}`);
+}
+
+function getBaseModelOptions(folder) {
+    const cache = modelCache[folder];
+    if (!cache || cache.baseModels.length === 0) return ["All"];
+    return ["All", ...cache.baseModels];
+}
+
+async function refreshModels(folder) {
+    if (!modelManagerState.connected) return;
+    try {
+        const resp = await fetch(`/model-manager/models/${folder}`);
+        const data = await resp.json();
+        if (data.models) {
+            const models = data.models;
+            modelCache[folder] = {
+                models,
+                values: models.map(m => `${m.id}:${m.name}`),
+                baseModels: [...new Set(models.map(m => m.baseModel).filter(Boolean))].sort(),
+            };
+        }
+    } catch (e) {
+        console.warn(`Model Manager: failed to refresh ${folder}`, e);
+    }
+}
+
+async function refreshAllModels() {
+    await Promise.all(["checkpoints", "loras", "vae"].map(refreshModels));
+    updateAllNodeCombos();
+}
+
+// Directly update combo widget values on all existing graph nodes
+function updateAllNodeCombos() {
+    if (!app.graph?._nodes) return;
+    for (const node of app.graph._nodes) {
+        updateNodeCombo(node);
+    }
+    app.graph.setDirtyCanvas(true, true);
+}
+
+function updateNodeCombo(node) {
+    const folder = NODE_FOLDER_MAP[node.type];
+    if (!folder || !modelCache[folder]) return;
+
+    // Update base_model widget options (if present)
+    const baseModelWidget = node.widgets?.find(w => w.name === "base_model");
+    if (baseModelWidget) {
+        baseModelWidget.options.values = getBaseModelOptions(folder);
+    }
+
+    // Multi-LoRA doesn't have a standard combo — its dropdowns are built on the fly
+    if (node.type === "ModelManagerMultiLoRALoader") return;
+
+    // Update model combo values
+    const comboName = FOLDER_COMBO_MAP[folder];
+    if (!comboName) return;
+    const comboWidget = node.widgets?.find(w => w.name === comboName);
+    if (!comboWidget) return;
+
+    const baseModel = baseModelWidget?.value;
+    const values = getCacheValues(folder, baseModel);
+    comboWidget.options = comboWidget.options || {};
+    comboWidget.options.values = values.length > 0 ? values : ["(no models found)"];
+}
 
 // ---------------------------------------------------------------------------
 // Shared UI helpers
@@ -147,26 +227,11 @@ async function fetchStatus() {
     }
 }
 
-async function refreshLoraValues() {
-    if (!modelManagerState.connected) return;
-    try {
-        const resp = await fetch("/model-manager/models/loras");
-        const data = await resp.json();
-        if (data.models) {
-            loraModels.length = 0;
-            loraModels.push(...data.models);
-            loraValues.length = 0;
-            loraValues.push("None", ...data.models.map(m => `${m.id}:${m.name}`));
-        }
-    } catch (e) {
-        console.warn("Model Manager: failed to refresh LoRA list", e);
-    }
-}
-
 function updateAllWidgets() {
     for (const w of trackedWidgets) {
         if (w.onModelManagerStateChange) w.onModelManagerStateChange();
     }
+    if (app.graph) app.graph.setDirtyCanvas(true, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -223,9 +288,8 @@ function showConnectDialog() {
             modelManagerState.connected = true;
             modelManagerState.api_url = url;
             overlay.remove();
-            await refreshLoraValues();
             updateAllWidgets();
-            if (app.refreshComboInNodes) app.refreshComboInNodes();
+            await refreshAllModels();
         } catch (e) {
             errorDiv.textContent = "Connection failed: " + e.message;
             errorDiv.style.display = "block";
@@ -263,8 +327,10 @@ async function doDisconnect() {
 
     modelManagerState.connected = false;
     modelManagerState.api_url = null;
+    // Clear caches
+    for (const key of Object.keys(modelCache)) delete modelCache[key];
     updateAllWidgets();
-    if (app.refreshComboInNodes) app.refreshComboInNodes();
+    updateAllNodeCombos();
 }
 
 // ---------------------------------------------------------------------------
@@ -371,13 +437,21 @@ function isDualMode(node) {
     return node.properties?.showStrengths === "Model & Clip";
 }
 
-function buildGroupedLoraMenu(onSelect) {
+function getFilteredLoraModels(node) {
+    const cache = modelCache.loras;
+    if (!cache) return [];
+    const baseModel = node.widgets?.find(w => w.name === "base_model")?.value;
+    if (!baseModel || baseModel === "All") return cache.models;
+    return cache.models.filter(m => m.baseModel === baseModel);
+}
+
+function buildGroupedLoraMenu(models, onSelect) {
     // Group LoRA models by baseModel into nested submenus
     const rootItems = [];
     rootItems.push({ content: "None", callback: () => onSelect("None") });
 
     const groups = {};
-    for (const m of loraModels) {
+    for (const m of models) {
         const group = m.baseModel || "Other";
         if (!groups[group]) groups[group] = [];
         groups[group].push(m);
@@ -386,7 +460,7 @@ function buildGroupedLoraMenu(onSelect) {
     const groupNames = Object.keys(groups).sort();
     if (groupNames.length <= 1) {
         // No grouping needed — flat list
-        for (const m of loraModels) {
+        for (const m of models) {
             const value = `${m.id}:${m.name}`;
             rootItems.push({
                 content: m.name,
@@ -414,7 +488,8 @@ function buildGroupedLoraMenu(onSelect) {
 }
 
 function showLoraDropdown(event, widget, node) {
-    const items = buildGroupedLoraMenu((v) => {
+    const models = getFilteredLoraModels(node);
+    const items = buildGroupedLoraMenu(models, (v) => {
         widget.value = { ...widget.value, lora: v, on: v !== "None" };
         node.setDirtyCanvas(true);
     });
@@ -475,9 +550,11 @@ function getLoraWidgets(node) {
 
 function createLoraWidget(node, index, initialValue) {
     const val = initialValue || { on: true, lora: "None", strength: 1.0, strengthTwo: null };
+    const cache = modelCache.loras;
+    const comboValues = cache ? ["None", ...cache.values] : ["None"];
     // Create as combo (for addWidget initialization), then change type to prevent
     // LiteGraph's combo-specific processing from resetting our object value
-    const w = node.addWidget("combo", `lora_${index}`, "None", null, { values: loraValues });
+    const w = node.addWidget("combo", `lora_${index}`, "None", null, { values: comboValues });
     w.type = "lora_slot";
     w.value = val;
     w.options.values = undefined; // prevent LiteGraph combo picker on dblclick
@@ -747,13 +824,13 @@ function createToggleAllWidget(node) {
 
 function createAddLoraButton(node) {
     const btn = node.addWidget("button", "add_lora", "Add LoRA", (_, __, ___, event) => {
-        // Show chooser dropdown with grouped LoRA list
-        if (loraModels.length === 0) {
+        const models = getFilteredLoraModels(node);
+        if (models.length === 0) {
             // No LoRAs available — add a blank slot
             addLoraSlot(node, btn, "None");
             return;
         }
-        const items = buildGroupedLoraMenu((v) => {
+        const items = buildGroupedLoraMenu(models, (v) => {
             addLoraSlot(node, btn, v);
         });
         new LiteGraph.ContextMenu(items, {
@@ -802,6 +879,17 @@ function renumberLoraWidgets(node) {
     }
 }
 
+// -- Base model filter widget for LoRA nodes --------------------------------
+
+function addBaseModelWidget(node) {
+    const w = node.addWidget("combo", "base_model", "All", () => {
+        updateNodeCombo(node);
+        node.setDirtyCanvas(true);
+    }, { values: getBaseModelOptions("loras") });
+    w.serialize = false;
+    return w;
+}
+
 // -- Setup & lifecycle -----------------------------------------------------
 
 function setupLoraNode(node) {
@@ -819,6 +907,9 @@ function setupLoraNode(node) {
             input.name === "model" || input.name === "clip"
         );
     }
+
+    // Base model filter
+    addBaseModelWidget(node);
 
     // Create Toggle All
     createToggleAllWidget(node);
@@ -857,10 +948,16 @@ function setupLoraNode(node) {
     // Workflow load — restore slots from saved widget values
     const origConfigure = node.configure;
     node.configure = function (info) {
-        // Strip dynamic LoRA widgets before configure restores values
-        node.widgets = (node.widgets || []).filter(w =>
-            !w._isLoraSlot && !w._isToggleAll && !w._isAddLora
-        );
+        // Strip dynamic LoRA widgets, stash trailing widgets (auth/refresh) for re-appending
+        const trailingWidgets = [];
+        node.widgets = (node.widgets || []).filter(w => {
+            if (w._isLoraSlot || w._isToggleAll || w._isAddLora) return false;
+            if (w.name === "mm_auth" || w.name === "mm_refresh") {
+                trailingWidgets.push(w);
+                return false;
+            }
+            return true;
+        });
         if (node.inputs) {
             node.inputs = node.inputs.filter(input =>
                 input.name === "model" || input.name === "clip"
@@ -897,6 +994,10 @@ function setupLoraNode(node) {
         }
 
         createAddLoraButton(node);
+
+        // Re-append trailing widgets in correct order
+        node.widgets.push(...trailingWidgets);
+
         fitNodeHeight(node);
     };
 
@@ -982,7 +1083,7 @@ app.registerExtension({
     async setup() {
         await fetchStatus();
         if (modelManagerState.connected) {
-            await refreshLoraValues();
+            await refreshAllModels();
         }
     },
 
@@ -990,10 +1091,11 @@ app.registerExtension({
         if (!MODEL_MANAGER_NODE_TYPES.includes(nodeData.name)) return;
 
         const folderKey = NODE_FOLDER_MAP[nodeData.name];
-        const isLoraNode = nodeData.name === "ModelManagerMultiLoRALoader";
+        const isMultiLoraNode = nodeData.name === "ModelManagerMultiLoRALoader";
+        const isSingleLoraNode = nodeData.name === "ModelManagerLoRALoader";
 
-        // Register the showStrengths property for the LoRA node
-        if (isLoraNode) {
+        // Register the showStrengths property for the multi-LoRA node
+        if (isMultiLoraNode) {
             nodeType.prototype.properties = {
                 ...(nodeType.prototype.properties || {}),
                 showStrengths: "Single",
@@ -1011,8 +1113,8 @@ app.registerExtension({
 
             const node = this;
 
-            // --- Dynamic LoRA slot management ---
-            if (isLoraNode) {
+            // --- Dynamic LoRA slot management (multi-LoRA) ---
+            if (isMultiLoraNode) {
                 setupLoraNode(node);
 
                 // API JSON loading workaround: ComfyUI's API format doesn't call
@@ -1040,6 +1142,24 @@ app.registerExtension({
                 }, 16);
             }
 
+            // --- Base model filter for single LoRA ---
+            if (isSingleLoraNode) {
+                const loraWidget = node.widgets?.find(w => w.name === "lora_name");
+                if (loraWidget) {
+                    const bmWidget = addBaseModelWidget(node);
+                    // Move base_model before lora_name
+                    const widgets = node.widgets;
+                    const bmIdx = widgets.indexOf(bmWidget);
+                    const lnIdx = widgets.indexOf(loraWidget);
+                    if (bmIdx > lnIdx) {
+                        widgets.splice(bmIdx, 1);
+                        widgets.splice(lnIdx, 0, bmWidget);
+                    }
+                    // Initialize combo values from cache
+                    updateNodeCombo(node);
+                }
+            }
+
             // --- Auth button ---
             const authWidget = node.addWidget("button", "mm_auth", null, () => {
                 if (modelManagerState.connected) {
@@ -1065,8 +1185,7 @@ app.registerExtension({
                 node.setDirtyCanvas(true);
                 try {
                     await fetch("/model-manager/refresh-models", { method: "POST" });
-                    await refreshLoraValues();
-                    if (app.refreshComboInNodes) app.refreshComboInNodes();
+                    await refreshAllModels();
                 } catch (e) {
                     console.warn("Model Manager: refresh failed", e);
                 }
