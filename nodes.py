@@ -397,6 +397,7 @@ class ModelManagerImageUpload:
                 "images": ("IMAGE",),
                 "upload_to": (["Diffusion Model", "LoRA"],),
                 "model_name": (_get_model_list("diffusion_models"),),
+                "version_specific": ("BOOLEAN", {"default": False}),
             },
             "optional": {
                 "lora_info": ("MM_LORA_INFO",),
@@ -421,10 +422,12 @@ class ModelManagerImageUpload:
     def IS_CHANGED(cls, **kwargs):
         return float("nan")
 
-    def upload(self, images, upload_to, model_name, lora_info=None, prompt="",
-               negative_prompt="", seed=0, steps=0, cfg_scale=0.0,
+    def upload(self, images, upload_to, model_name, version_specific, lora_info=None,
+               prompt="", negative_prompt="", seed=0, steps=0, cfg_scale=0.0,
                sampler="", scheduler="", extra_pnginfo=None):
         model_id, version_id = _parse_model_value(model_name)
+        if not version_specific:
+            version_id = None
         if model_id is None:
             return ("Error: invalid model selection",)
 

@@ -388,12 +388,12 @@ class ModelManagerClient:
             raise ModelManagerAuthError("Not connected — please connect first")
 
         url = f"{self._api_url}/api/v1/models/{model_id}/images"
-        if version_id:
-            url += f"?versionId={version_id}"
         headers = {"Authorization": f"Bearer {self._api_key}"}
 
         files = {"file": (filename, image_data, "image/png")}
         data = {}
+        if version_id:
+            data["versionId"] = str(version_id)
         if metadata:
             for key, value in metadata.items():
                 if value is None:
