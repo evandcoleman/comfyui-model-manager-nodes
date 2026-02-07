@@ -380,6 +380,35 @@ class ModelManagerClearCache:
         return (f"Cleared {freed_mb:.1f} MB",)
 
 # ---------------------------------------------------------------------------
+# Merge LoRA Info
+# ---------------------------------------------------------------------------
+
+class ModelManagerMergeLoRAInfo:
+    RETURN_TYPES = ("MM_LORA_INFO",)
+    RETURN_NAMES = ("lora_info",)
+    FUNCTION = "merge"
+    CATEGORY = "loaders/model-manager"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {},
+            "optional": {
+                "lora_info_1": ("MM_LORA_INFO",),
+                "lora_info_2": ("MM_LORA_INFO",),
+                "lora_info_3": ("MM_LORA_INFO",),
+                "lora_info_4": ("MM_LORA_INFO",),
+            },
+        }
+
+    def merge(self, lora_info_1=None, lora_info_2=None, lora_info_3=None, lora_info_4=None):
+        merged = []
+        for info in (lora_info_1, lora_info_2, lora_info_3, lora_info_4):
+            if info:
+                merged.extend(info)
+        return (merged,)
+
+# ---------------------------------------------------------------------------
 # Image Upload
 # ---------------------------------------------------------------------------
 

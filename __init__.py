@@ -9,6 +9,7 @@ from .nodes import (
     ModelManagerMultiLoRALoader,
     ModelManagerVAELoader,
     ModelManagerClearCache,
+    ModelManagerMergeLoRAInfo,
     ModelManagerImageUpload,
 )
 from .client import get_client, ModelManagerAuthError, ModelManagerError
@@ -26,6 +27,7 @@ NODE_CLASS_MAPPINGS = {
     "ModelManagerMultiLoRALoader": ModelManagerMultiLoRALoader,
     "ModelManagerVAELoader": ModelManagerVAELoader,
     "ModelManagerClearCache": ModelManagerClearCache,
+    "ModelManagerMergeLoRAInfo": ModelManagerMergeLoRAInfo,
     "ModelManagerImageUpload": ModelManagerImageUpload,
 }
 
@@ -36,6 +38,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ModelManagerMultiLoRALoader": "Load LoRA Multi (Model Manager)",
     "ModelManagerVAELoader": "Load VAE (Model Manager)",
     "ModelManagerClearCache": "Clear Cache (Model Manager)",
+    "ModelManagerMergeLoRAInfo": "Merge LoRA Info (Model Manager)",
     "ModelManagerImageUpload": "Upload Image (Model Manager)",
 }
 
