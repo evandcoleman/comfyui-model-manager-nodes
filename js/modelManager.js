@@ -7,7 +7,7 @@ const NODE_FOLDER_MAP = {
     ModelManagerMultiLoRALoader: "loras",
     ModelManagerVAELoader: "vae",
     ModelManagerClearCache: null,
-    ModelManagerImageUpload: "all",
+    ModelManagerImageUpload: "checkpoints",
 };
 
 // Maps folder -> combo widget name on the node
@@ -15,7 +15,11 @@ const FOLDER_COMBO_MAP = {
     checkpoints: "ckpt_name",
     loras: "lora_name",
     vae: "vae_name",
-    all: "model_name",
+};
+
+// Node types whose combo widget name differs from FOLDER_COMBO_MAP
+const NODE_COMBO_OVERRIDE = {
+    ModelManagerImageUpload: "model_name",
 };
 
 const MODEL_MANAGER_NODE_TYPES = Object.keys(NODE_FOLDER_MAP);
@@ -38,25 +42,7 @@ function modelComboValue(m) {
     return vid ? `${m.id}@${vid}:${m.name}` : `${m.id}:${m.name}`;
 }
 
-function getAllModelValues() {
-    // Combine all folders, deduplicate by model ID
-    const seen = new Set();
-    const values = [];
-    for (const folder of ["checkpoints", "loras", "vae"]) {
-        const cache = modelCache[folder];
-        if (!cache) continue;
-        for (const m of cache.models) {
-            if (!seen.has(m.id)) {
-                seen.add(m.id);
-                values.push(`${m.id}:${m.modelName || m.name}`);
-            }
-        }
-    }
-    return values;
-}
-
 function getCacheValues(folder, baseModel) {
-    if (folder === "all") return getAllModelValues();
     const cache = modelCache[folder];
     if (!cache) return [];
     if (!baseModel || baseModel === "All") return cache.values;
@@ -106,8 +92,7 @@ function updateAllNodeCombos() {
 function updateNodeCombo(node) {
     const folder = NODE_FOLDER_MAP[node.type];
     if (!folder) return;
-    // For "all" (upload node), values are derived from all caches; skip per-folder check
-    if (folder !== "all" && !modelCache[folder]) return;
+    if (!modelCache[folder]) return;
 
     // Update base_model widget options (if present)
     const baseModelWidget = node.widgets?.find(w => w.name === "base_model");
@@ -119,7 +104,7 @@ function updateNodeCombo(node) {
     if (node.type === "ModelManagerMultiLoRALoader") return;
 
     // Update model combo values
-    const comboName = FOLDER_COMBO_MAP[folder];
+    const comboName = NODE_COMBO_OVERRIDE[node.type] || FOLDER_COMBO_MAP[folder];
     if (!comboName) return;
 
     const baseModel = baseModelWidget?.value;

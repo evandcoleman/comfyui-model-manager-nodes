@@ -118,8 +118,8 @@ class ModelManagerCheckpointLoader:
 # ---------------------------------------------------------------------------
 
 class ModelManagerLoRALoader:
-    RETURN_TYPES = ("MODEL", "CLIP")
-    RETURN_NAMES = ("model", "clip")
+    RETURN_TYPES = ("MODEL", "CLIP", "MM_LORA_INFO")
+    RETURN_NAMES = ("model", "clip", "lora_info")
     FUNCTION = "load"
     CATEGORY = "loaders/model-manager"
 
@@ -138,6 +138,7 @@ class ModelManagerLoRALoader:
             },
             "optional": {
                 "clip": ("CLIP",),
+                "lora_info": ("MM_LORA_INFO",),
             },
         }
 
@@ -145,15 +146,15 @@ class ModelManagerLoRALoader:
     def IS_CHANGED(cls, **kwargs):
         return get_client().version
 
-    def load(self, model, lora_name, strength_model, strength_clip, clip=None):
+    def load(self, model, lora_name, strength_model, strength_clip, clip=None, lora_info=None):
         import comfy.utils
         import comfy.sd
 
-        if self.loaded_lora_name != lora_name:
-            model_id, version_id = _parse_model_value(lora_name)
-            if model_id is None:
-                raise ValueError(f"Invalid LoRA selection: {lora_name}")
+        model_id, version_id = _parse_model_value(lora_name)
+        if model_id is None:
+            raise ValueError(f"Invalid LoRA selection: {lora_name}")
 
+        if self.loaded_lora_name != lora_name:
             client = get_client()
             pbar = comfy.utils.ProgressBar(100)
             def on_progress(downloaded, total):
@@ -162,15 +163,26 @@ class ModelManagerLoRALoader:
             self.loaded_lora = comfy.utils.load_torch_file(local_path, safe_load=True)
             self.loaded_lora_name = lora_name
 
-        return comfy.sd.load_lora_for_models(model, clip, self.loaded_lora, strength_model, strength_clip)
+        model_out, clip_out = comfy.sd.load_lora_for_models(model, clip, self.loaded_lora, strength_model, strength_clip)
+
+        info = list(lora_info or [])
+        display_name = lora_name.split(":", 1)[1] if ":" in lora_name else lora_name
+        info.append({
+            "modelId": model_id,
+            "versionId": version_id,
+            "name": display_name,
+            "strength": strength_model,
+        })
+
+        return (model_out, clip_out, info)
 
 # ---------------------------------------------------------------------------
 # Multi-LoRA Loader (Power LoRA style)
 # ---------------------------------------------------------------------------
 
 class ModelManagerMultiLoRALoader:
-    RETURN_TYPES = ("MODEL", "CLIP")
-    RETURN_NAMES = ("model", "clip")
+    RETURN_TYPES = ("MODEL", "CLIP", "MM_LORA_INFO")
+    RETURN_NAMES = ("model", "clip", "lora_info")
     FUNCTION = "load"
     CATEGORY = "loaders/model-manager"
 
@@ -200,6 +212,8 @@ class ModelManagerMultiLoRALoader:
         import comfy.utils
         import comfy.sd
 
+        lora_info = []
+
         for key in sorted(kwargs.keys()):
             if not key.startswith("lora_"):
                 continue
@@ -223,12 +237,12 @@ class ModelManagerMultiLoRALoader:
             if clip is None:
                 strength_clip = 0
 
-            if lora_name not in self.loaded_loras:
-                model_id, version_id = _parse_model_value(lora_name)
-                if model_id is None:
-                    logger.warning(f"Skipping invalid LoRA value: {lora_name}")
-                    continue
+            model_id, version_id = _parse_model_value(lora_name)
+            if model_id is None:
+                logger.warning(f"Skipping invalid LoRA value: {lora_name}")
+                continue
 
+            if lora_name not in self.loaded_loras:
                 client = get_client()
                 pbar = comfy.utils.ProgressBar(100)
                 def on_progress(downloaded, total):
@@ -240,8 +254,15 @@ class ModelManagerMultiLoRALoader:
                 model, clip = comfy.sd.load_lora_for_models(
                     model, clip, self.loaded_loras[lora_name], strength_model, strength_clip,
                 )
+                display_name = lora_name.split(":", 1)[1] if ":" in lora_name else lora_name
+                lora_info.append({
+                    "modelId": model_id,
+                    "versionId": version_id,
+                    "name": display_name,
+                    "strength": strength_model,
+                })
 
-        return (model, clip)
+        return (model, clip, lora_info)
 
 # ---------------------------------------------------------------------------
 # VAE Loader
@@ -325,35 +346,6 @@ class ModelManagerClearCache:
 # Image Upload
 # ---------------------------------------------------------------------------
 
-def _get_all_model_list():
-    """Fetch all models across every category, deduplicated by model ID."""
-    try:
-        client = get_client()
-        if not client.authenticated:
-            return ["(not connected)"]
-        all_models = []
-        for folder in ("checkpoints", "loras", "vae"):
-            try:
-                all_models.extend(client.list_models(folder))
-            except Exception:
-                continue
-        if not all_models:
-            return ["(no models found)"]
-        seen = set()
-        unique = []
-        for m in all_models:
-            mid = m["id"]
-            if mid not in seen:
-                seen.add(mid)
-                unique.append(f"{mid}:{m.get('modelName', m['name'])}")
-        return unique
-    except ModelManagerAuthError:
-        return ["(not connected)"]
-    except Exception as e:
-        logger.warning(f"Failed to list all models: {e}")
-        return ["(error loading models)"]
-
-
 class ModelManagerImageUpload:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("status",)
@@ -366,9 +358,10 @@ class ModelManagerImageUpload:
         return {
             "required": {
                 "images": ("IMAGE",),
-                "model_name": (_get_all_model_list(),),
+                "model_name": (_get_model_list("checkpoints"),),
             },
             "optional": {
+                "lora_info": ("MM_LORA_INFO",),
                 "prompt": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
                 "negative_prompt": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "forceInput": True}),
@@ -386,9 +379,9 @@ class ModelManagerImageUpload:
     def IS_CHANGED(cls, **kwargs):
         return float("nan")
 
-    def upload(self, images, model_name, prompt="", negative_prompt="",
-               seed=0, steps=0, cfg_scale=0.0, sampler="", scheduler="",
-               extra_pnginfo=None):
+    def upload(self, images, model_name, lora_info=None, prompt="",
+               negative_prompt="", seed=0, steps=0, cfg_scale=0.0,
+               sampler="", scheduler="", extra_pnginfo=None):
         model_id, _ = _parse_model_value(model_name)
         if model_id is None:
             return ("Error: invalid model selection",)
@@ -426,6 +419,8 @@ class ModelManagerImageUpload:
                 metadata["sampler"] = sampler
             if scheduler:
                 metadata["scheduler"] = scheduler
+            if lora_info:
+                metadata["loras"] = lora_info
             if workflow_json:
                 metadata["comfyWorkflow"] = workflow_json
 
