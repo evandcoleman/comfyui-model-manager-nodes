@@ -1227,24 +1227,29 @@ app.registerExtension({
                     updateNodeCombo(node);
                 }
 
-                // Fix workflow restore: base_model (serialize=false) inserted before
-                // lora_name shifts widget indices, causing configure() to assign saved
-                // values to the wrong widgets.
+                // Fix workflow restore: non-serializable widgets (base_model, buttons)
+                // shift widget indices, causing configure() to assign saved values
+                // to wrong widgets. Save/restore by name to bypass index issues.
+                node.onSerialize = function (o) {
+                    const values = {};
+                    for (const w of (node.widgets || [])) {
+                        if (w.serialize !== false && w.name) {
+                            values[w.name] = w.value;
+                        }
+                    }
+                    o._mm_values = values;
+                };
+
                 const origConfigure = node.configure;
                 node.configure = function (info) {
-                    // Temporarily remove base_model so configure maps values correctly
-                    const bmIdx = node.widgets.findIndex(w => w.name === "base_model");
-                    let bmWidget = null;
-                    if (bmIdx >= 0) {
-                        bmWidget = node.widgets.splice(bmIdx, 1)[0];
-                    }
-
                     origConfigure?.call(this, info);
-
-                    // Re-insert base_model before lora_name
-                    if (bmWidget) {
-                        const lnIdx = node.widgets.findIndex(w => w.name === "lora_name");
-                        node.widgets.splice(lnIdx >= 0 ? lnIdx : 0, 0, bmWidget);
+                    // Restore values by widget name (ignores index misalignment)
+                    if (info._mm_values) {
+                        for (const w of (node.widgets || [])) {
+                            if (w.name in info._mm_values) {
+                                w.value = info._mm_values[w.name];
+                            }
+                        }
                     }
                 };
             }
