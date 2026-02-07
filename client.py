@@ -368,7 +368,7 @@ class ModelManagerClient:
         logger.info(f"Downloaded model {model_id} -> {local_path}")
         return local_path
 
-    def upload_image(self, model_id, image_data, filename, metadata=None):
+    def upload_image(self, model_id, image_data, filename, metadata=None, version_id=None):
         """Upload an image with generation metadata to a model.
 
         Args:
@@ -378,6 +378,7 @@ class ModelManagerClient:
             metadata: dict with optional keys — prompt, negativePrompt, seed,
                       steps, cfgScale, sampler, scheduler, nsfwLevel, loras,
                       comfyWorkflow
+            version_id: optional version ID to associate the image with
         Returns:
             The created image dict from the API.
         """
@@ -387,6 +388,8 @@ class ModelManagerClient:
             raise ModelManagerAuthError("Not connected — please connect first")
 
         url = f"{self._api_url}/api/v1/models/{model_id}/images"
+        if version_id:
+            url += f"?versionId={version_id}"
         headers = {"Authorization": f"Bearer {self._api_key}"}
 
         files = {"file": (filename, image_data, "image/png")}
