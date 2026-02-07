@@ -3,6 +3,7 @@ import { app } from "../../scripts/app.js";
 // Maps node type -> folder key used by the backend
 const NODE_FOLDER_MAP = {
     ModelManagerDiffusionModelLoader: "diffusion_models",
+    ModelManagerCheckpointLoader: "checkpoints",
     ModelManagerLoRALoader: "loras",
     ModelManagerMultiLoRALoader: "loras",
     ModelManagerVAELoader: "vae",
@@ -13,6 +14,7 @@ const NODE_FOLDER_MAP = {
 // Maps folder -> combo widget name on the node
 const FOLDER_COMBO_MAP = {
     diffusion_models: "diffusion_model",
+    checkpoints: "checkpoint",
     loras: "lora_name",
     vae: "vae_name",
 };
@@ -76,7 +78,7 @@ async function refreshModels(folder) {
 }
 
 async function refreshAllModels() {
-    await Promise.all(["diffusion_models", "loras", "vae"].map(refreshModels));
+    await Promise.all(["diffusion_models", "checkpoints", "loras", "vae"].map(refreshModels));
     updateAllNodeCombos();
 }
 

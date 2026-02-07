@@ -114,6 +114,43 @@ class ModelManagerDiffusionModelLoader:
         return comfy.sd.load_checkpoint_guess_config(local_path)[:3]
 
 # ---------------------------------------------------------------------------
+# Checkpoint Loader
+# ---------------------------------------------------------------------------
+
+class ModelManagerCheckpointLoader:
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE")
+    RETURN_NAMES = ("model", "clip", "vae")
+    FUNCTION = "load"
+    CATEGORY = "loaders/model-manager"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "checkpoint": (_get_model_list("checkpoints"),),
+            }
+        }
+
+    @classmethod
+    def IS_CHANGED(cls, checkpoint):
+        return get_client().version
+
+    def load(self, checkpoint):
+        import comfy.sd
+        import comfy.utils
+
+        model_id, version_id = _parse_model_value(checkpoint)
+        if model_id is None:
+            raise ValueError(f"Invalid checkpoint selection: {checkpoint}")
+
+        client = get_client()
+        pbar = comfy.utils.ProgressBar(100)
+        def on_progress(downloaded, total):
+            pbar.update_absolute(int(downloaded * 100 / total), 100)
+        local_path = client.download_model(model_id, "checkpoints", version_id=version_id, progress_callback=on_progress)
+        return comfy.sd.load_checkpoint_guess_config(local_path)[:3]
+
+# ---------------------------------------------------------------------------
 # LoRA Loader (single)
 # ---------------------------------------------------------------------------
 
