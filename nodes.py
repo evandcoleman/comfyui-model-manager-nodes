@@ -367,13 +367,17 @@ class ModelManagerImageUpload:
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "forceInput": True}),
                 "steps": ("INT", {"default": 0, "min": 0, "max": 10000, "forceInput": True}),
                 "cfg_scale": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step": 0.1, "forceInput": True}),
-                "sampler": (any_type, {"default": "", "forceInput": True}),
-                "scheduler": (any_type, {"default": "", "forceInput": True}),
+                "sampler": (any_type,),
+                "scheduler": (any_type,),
             },
             "hidden": {
                 "extra_pnginfo": "EXTRA_PNGINFO",
             },
         }
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        return True
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
@@ -416,9 +420,9 @@ class ModelManagerImageUpload:
             if cfg_scale:
                 metadata["cfgScale"] = cfg_scale
             if sampler:
-                metadata["sampler"] = sampler
+                metadata["sampler"] = str(sampler)
             if scheduler:
-                metadata["scheduler"] = scheduler
+                metadata["scheduler"] = str(scheduler)
             if lora_info:
                 metadata["loras"] = lora_info
             if workflow_json:
