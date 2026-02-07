@@ -99,13 +99,55 @@ function updateNodeCombo(node) {
     // Update model combo values
     const comboName = FOLDER_COMBO_MAP[folder];
     if (!comboName) return;
-    const comboWidget = node.widgets?.find(w => w.name === comboName);
-    if (!comboWidget) return;
 
     const baseModel = baseModelWidget?.value;
     const values = getCacheValues(folder, baseModel);
-    comboWidget.options = comboWidget.options || {};
-    comboWidget.options.values = values.length > 0 ? values : ["(no models found)"];
+    const comboValues = values.length > 0 ? values : ["(no models found)"];
+
+    // Update the widget on this node (if it's still visible as a widget)
+    const comboWidget = node.widgets?.find(w => w.name === comboName);
+    if (comboWidget) {
+        comboWidget.options = comboWidget.options || {};
+        comboWidget.options.values = comboValues;
+    }
+
+    // Keep input.widget.config in sync so Primitive nodes get current values
+    // when they connect (or are already connected).
+    const input = (node.inputs || []).find(i => i.name === comboName);
+    if (input?.widget?.config) {
+        input.widget.config[0] = comboValues;
+    }
+
+    // Update any upstream node (Primitive/Reroute) already connected to this input
+    if (input?.link != null) {
+        updateUpstreamPrimitive(input.link, comboValues);
+    }
+}
+
+// Walk upstream through a link chain (handles Reroute nodes) and update
+// the originating Primitive node's combo widget with fresh values.
+function updateUpstreamPrimitive(linkId, comboValues) {
+    const link = app.graph.links?.[linkId];
+    if (!link) return;
+    const srcNode = app.graph.getNodeById(link.origin_id);
+    if (!srcNode) return;
+
+    // If this is a Reroute, walk further upstream
+    if (srcNode.type === "Reroute") {
+        const rInput = srcNode.inputs?.[0];
+        if (rInput?.link != null) {
+            updateUpstreamPrimitive(rInput.link, comboValues);
+        }
+        return;
+    }
+
+    // Update every combo-like widget on the source node (Primitive has one widget)
+    for (const w of (srcNode.widgets || [])) {
+        if (w.type === "combo" || (w.options && Array.isArray(w.options?.values))) {
+            w.options = w.options || {};
+            w.options.values = comboValues;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
