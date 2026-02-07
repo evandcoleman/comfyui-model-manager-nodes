@@ -1147,6 +1147,7 @@ app.registerExtension({
         const folderKey = NODE_FOLDER_MAP[nodeData.name];
         const isMultiLoraNode = nodeData.name === "ModelManagerMultiLoRALoader";
         const isSingleLoraNode = nodeData.name === "ModelManagerLoRALoader";
+        const isUploadNode = nodeData.name === "ModelManagerImageUpload";
 
         // Register the showStrengths property for the multi-LoRA node
         if (isMultiLoraNode) {
@@ -1211,6 +1212,16 @@ app.registerExtension({
                     }
                     // Initialize combo values from cache
                     updateNodeCombo(node);
+                }
+            }
+
+            // --- Upload Image: force wildcard type on metadata inputs ---
+            if (isUploadNode) {
+                // Ensure LiteGraph sees these as "*" so combo outputs can connect
+                for (const input of (node.inputs || [])) {
+                    if (input.name === "sampler" || input.name === "scheduler") {
+                        input.type = "*";
+                    }
                 }
             }
 
