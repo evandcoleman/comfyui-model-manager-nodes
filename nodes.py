@@ -367,8 +367,8 @@ class ModelManagerImageUpload:
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "forceInput": True}),
                 "steps": ("INT", {"default": 0, "min": 0, "max": 10000, "forceInput": True}),
                 "cfg_scale": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step": 0.1, "forceInput": True}),
-                "sampler": ("STRING", {"default": "", "forceInput": True}),
-                "scheduler": ("STRING", {"default": "", "forceInput": True}),
+                "sampler": (any_type, {"default": "", "forceInput": True}),
+                "scheduler": (any_type, {"default": "", "forceInput": True}),
             },
             "hidden": {
                 "extra_pnginfo": "EXTRA_PNGINFO",
