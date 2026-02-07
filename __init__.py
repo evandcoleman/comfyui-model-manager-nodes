@@ -3,7 +3,7 @@ import logging
 from aiohttp import web
 
 from .nodes import (
-    ModelManagerCheckpointLoader,
+    ModelManagerDiffusionModelLoader,
     ModelManagerLoRALoader,
     ModelManagerMultiLoRALoader,
     ModelManagerVAELoader,
@@ -19,7 +19,7 @@ logger = logging.getLogger("comfyui-model-manager")
 # ---------------------------------------------------------------------------
 
 NODE_CLASS_MAPPINGS = {
-    "ModelManagerCheckpointLoader": ModelManagerCheckpointLoader,
+    "ModelManagerDiffusionModelLoader": ModelManagerDiffusionModelLoader,
     "ModelManagerLoRALoader": ModelManagerLoRALoader,
     "ModelManagerMultiLoRALoader": ModelManagerMultiLoRALoader,
     "ModelManagerVAELoader": ModelManagerVAELoader,
@@ -28,7 +28,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ModelManagerCheckpointLoader": "Load Checkpoint (Model Manager)",
+    "ModelManagerDiffusionModelLoader": "Load Diffusion Model (Model Manager)",
     "ModelManagerLoRALoader": "Load LoRA (Model Manager)",
     "ModelManagerMultiLoRALoader": "Load LoRA Multi (Model Manager)",
     "ModelManagerVAELoader": "Load VAE (Model Manager)",
@@ -42,7 +42,7 @@ WEB_DIRECTORY = "./js"
 # API Routes
 # ---------------------------------------------------------------------------
 
-ALLOWED_FOLDERS = {"checkpoints", "loras", "vae"}
+ALLOWED_FOLDERS = {"diffusion_models", "loras", "vae"}
 
 try:
     from server import PromptServer

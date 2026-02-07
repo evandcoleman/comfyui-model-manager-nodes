@@ -77,10 +77,10 @@ def _parse_model_value(value):
         return None, None
 
 # ---------------------------------------------------------------------------
-# Checkpoint Loader
+# Diffusion Model Loader
 # ---------------------------------------------------------------------------
 
-class ModelManagerCheckpointLoader:
+class ModelManagerDiffusionModelLoader:
     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
     RETURN_NAMES = ("model", "clip", "vae")
     FUNCTION = "load"
@@ -90,27 +90,27 @@ class ModelManagerCheckpointLoader:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "ckpt_name": (_get_model_list("checkpoints"),),
+                "diffusion_model": (_get_model_list("diffusion_models"),),
             }
         }
 
     @classmethod
-    def IS_CHANGED(cls, ckpt_name):
+    def IS_CHANGED(cls, diffusion_model):
         return get_client().version
 
-    def load(self, ckpt_name):
+    def load(self, diffusion_model):
         import comfy.sd
         import comfy.utils
 
-        model_id, version_id = _parse_model_value(ckpt_name)
+        model_id, version_id = _parse_model_value(diffusion_model)
         if model_id is None:
-            raise ValueError(f"Invalid model selection: {ckpt_name}")
+            raise ValueError(f"Invalid model selection: {diffusion_model}")
 
         client = get_client()
         pbar = comfy.utils.ProgressBar(100)
         def on_progress(downloaded, total):
             pbar.update_absolute(int(downloaded * 100 / total), 100)
-        local_path = client.download_model(model_id, "checkpoints", version_id=version_id, progress_callback=on_progress)
+        local_path = client.download_model(model_id, "diffusion_models", version_id=version_id, progress_callback=on_progress)
         return comfy.sd.load_checkpoint_guess_config(local_path)[:3]
 
 # ---------------------------------------------------------------------------
@@ -358,7 +358,7 @@ class ModelManagerImageUpload:
         return {
             "required": {
                 "images": ("IMAGE",),
-                "model_name": (_get_model_list("checkpoints"),),
+                "model_name": (_get_model_list("diffusion_models"),),
             },
             "optional": {
                 "lora_info": ("MM_LORA_INFO",),

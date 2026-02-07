@@ -75,7 +75,7 @@ def save_config(config):
 # ---------------------------------------------------------------------------
 
 FOLDER_TO_CATEGORY = {
-    "checkpoints": "Diffusion Model",
+    "diffusion_models": "Diffusion Model",
     "loras": "LoRA",
     "vae": "VAE",
 }
