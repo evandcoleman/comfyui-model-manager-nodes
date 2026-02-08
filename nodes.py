@@ -467,10 +467,18 @@ class ModelManagerImageUpload:
 
         # Build workflow JSON — prefer EXTRA_PNGINFO (web UI), fall back to PROMPT (API)
         workflow_json = None
+        logger.info(
+            f"Upload workflow sources: extra_pnginfo={type(extra_pnginfo).__name__ if extra_pnginfo else None}, "
+            f"comfy_prompt={type(comfy_prompt).__name__ if comfy_prompt else None}"
+        )
         if extra_pnginfo and isinstance(extra_pnginfo, dict):
             workflow_json = extra_pnginfo.get("workflow")
+            logger.info(f"Using EXTRA_PNGINFO workflow (keys: {list(extra_pnginfo.keys())})")
         if not workflow_json and comfy_prompt and isinstance(comfy_prompt, dict):
             workflow_json = comfy_prompt
+            logger.info("Using PROMPT as workflow fallback")
+        if not workflow_json:
+            logger.warning("No workflow data available from EXTRA_PNGINFO or PROMPT")
 
         results = []
         for i in range(images.shape[0]):

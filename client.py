@@ -405,7 +405,10 @@ class ModelManagerClient:
                 else:
                     data[key] = str(value)
 
+        workflow_size = len(data.get("comfyWorkflow", ""))
+        logger.info(f"Upload POST to {url}: fields={list(data.keys())}, comfyWorkflow size={workflow_size} bytes")
         resp = requests.post(url, headers=headers, files=files, data=data, timeout=120)
+        logger.info(f"Upload response: {resp.status_code}")
 
         if resp.status_code == 401:
             self._validated = False
