@@ -384,8 +384,8 @@ class ModelManagerClearCache:
 # ---------------------------------------------------------------------------
 
 class ModelManagerLoRADownload:
-    RETURN_TYPES = (any_type,)
-    RETURN_NAMES = ("lora_name",)
+    RETURN_TYPES = (any_type, any_type)
+    RETURN_NAMES = ("lora_name", "model_ref")
     FUNCTION = "download"
     CATEGORY = "loaders/model-manager"
 
@@ -421,7 +421,7 @@ class ModelManagerLoRADownload:
         for existing in os.listdir(lora_dir):
             if existing.startswith(prefix):
                 logger.info(f"LoRA already downloaded: {existing}")
-                return (existing,)
+                return (existing, lora_name)
 
         # Download via the client (streams the file)
         client = get_client()
@@ -473,7 +473,7 @@ class ModelManagerLoRADownload:
             raise
 
         logger.info(f"Downloaded LoRA to {local_path}")
-        return (final_name,)
+        return (final_name, lora_name)
 
 # ---------------------------------------------------------------------------
 # Merge LoRA Info
