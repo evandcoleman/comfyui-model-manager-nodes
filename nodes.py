@@ -380,6 +380,31 @@ class ModelManagerClearCache:
         return (f"Cleared {freed_mb:.1f} MB",)
 
 # ---------------------------------------------------------------------------
+# LoRA Selector
+# ---------------------------------------------------------------------------
+
+class ModelManagerLoRASelector:
+    RETURN_TYPES = (any_type,)
+    RETURN_NAMES = ("lora_name",)
+    FUNCTION = "select"
+    CATEGORY = "loaders/model-manager"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "lora_name": (_get_model_list("loras"),),
+            },
+        }
+
+    @classmethod
+    def IS_CHANGED(cls, lora_name):
+        return get_client().version
+
+    def select(self, lora_name):
+        return (lora_name,)
+
+# ---------------------------------------------------------------------------
 # Merge LoRA Info
 # ---------------------------------------------------------------------------
 

@@ -6,6 +6,7 @@ const NODE_FOLDER_MAP = {
     ModelManagerCheckpointLoader: "checkpoints",
     ModelManagerLoRALoader: "loras",
     ModelManagerMultiLoRALoader: "loras",
+    ModelManagerLoRASelector: "loras",
     ModelManagerVAELoader: "vae",
     ModelManagerClearCache: null,
     ModelManagerImageUpload: "diffusion_models",
@@ -1160,6 +1161,7 @@ app.registerExtension({
         const folderKey = NODE_FOLDER_MAP[nodeData.name];
         const isMultiLoraNode = nodeData.name === "ModelManagerMultiLoRALoader";
         const isSingleLoraNode = nodeData.name === "ModelManagerLoRALoader";
+        const isLoraSelector = nodeData.name === "ModelManagerLoRASelector";
         const isUploadNode = nodeData.name === "ModelManagerImageUpload";
 
         // Register the showStrengths property for the multi-LoRA node
@@ -1210,8 +1212,8 @@ app.registerExtension({
                 }, 16);
             }
 
-            // --- Base model filter for single LoRA ---
-            if (isSingleLoraNode) {
+            // --- Base model filter for single LoRA / LoRA selector ---
+            if (isSingleLoraNode || isLoraSelector) {
                 const loraWidget = node.widgets?.find(w => w.name === "lora_name");
                 if (loraWidget) {
                     const bmWidget = addBaseModelWidget(node);
